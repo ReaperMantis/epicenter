@@ -254,7 +254,9 @@ const enumerateDevices = async (): Promise<Result<Device[], RecorderError>> => {
 	}
 
 	// FFmpeg lists devices to stderr, not stdout
-	const output = result.stderr;
+	const output = DESKTOP_PLATFORM !== 'linux'
+	? result.stderr
+	: result.stdout;
 
 	const devices = parseDevices(output);
 
