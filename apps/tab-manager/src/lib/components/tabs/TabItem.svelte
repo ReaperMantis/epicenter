@@ -1,26 +1,31 @@
 <script lang="ts">
 	import { Button } from '@epicenter/ui/button';
 	import * as Item from '@epicenter/ui/item';
+	import { toastOnError } from '@epicenter/ui/sonner';
 	import * as Tooltip from '@epicenter/ui/tooltip';
 	import { cn } from '@epicenter/ui/utils';
-	import BookmarkIcon from '@lucide/svelte/icons/bookmark';
+	import ArchiveIcon from '@lucide/svelte/icons/archive';
 	import CopyIcon from '@lucide/svelte/icons/copy';
 	import PinIcon from '@lucide/svelte/icons/pin';
 	import PinOffIcon from '@lucide/svelte/icons/pin-off';
 	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
+	import StarIcon from '@lucide/svelte/icons/star';
 	import Volume2Icon from '@lucide/svelte/icons/volume-2';
 	import VolumeXIcon from '@lucide/svelte/icons/volume-x';
 	import XIcon from '@lucide/svelte/icons/x';
-	import { browserState } from '$lib/state/browser-state.svelte';
+	import { bookmarkState } from '$lib/state/bookmark-state.svelte';
+	import {
+		type BrowserTab,
+		browserState,
+	} from '$lib/state/browser-state.svelte';
 	import { savedTabState } from '$lib/state/saved-tab-state.svelte';
 	import { getDomain } from '$lib/utils/format';
-	import type { Tab } from '$lib/workspace';
 	import TabFavicon from './TabFavicon.svelte';
 
-	let { tab }: { tab: Tab } = $props();
+	let { tab }: { tab: BrowserTab } = $props();
 
-	const tabId = $derived(tab.tabId);
 	const domain = $derived(tab.url ? getDomain(tab.url) : '');
+	const isBookmarked = $derived(bookmarkState.isUrlBookmarked(tab.url));
 </script>
 
 <Item.Root
@@ -34,7 +39,7 @@
 		<button
 			type="button"
 			{...props}
-			onclick={() => browserState.actions.activate(tabId)}
+			onclick={() => browserState.activate(tab.id)}
 		>
 			<Item.Media> <TabFavicon src={tab.favIconUrl} /> </Item.Media>
 
@@ -81,9 +86,9 @@
 					onclick={(e: MouseEvent) => {
 						e.stopPropagation();
 						if (tab.pinned) {
-							browserState.actions.unpin(tabId);
+						browserState.unpin(tab.id);
 						} else {
-							browserState.actions.pin(tabId);
+						browserState.pin(tab.id);
 						}
 					}}
 				>
@@ -102,9 +107,9 @@
 						onclick={(e: MouseEvent) => {
 							e.stopPropagation();
 							if (tab.mutedInfo?.muted) {
-								browserState.actions.unmute(tabId);
+							browserState.unmute(tab.id);
 							} else {
-								browserState.actions.mute(tabId);
+							browserState.mute(tab.id);
 							}
 						}}
 					>
@@ -122,7 +127,7 @@
 					tooltip="Reload"
 					onclick={(e: MouseEvent) => {
 						e.stopPropagation();
-						browserState.actions.reload(tabId);
+						browserState.reload(tab.id);
 					}}
 				>
 					<RefreshCwIcon />
@@ -134,7 +139,7 @@
 					tooltip="Duplicate"
 					onclick={(e: MouseEvent) => {
 						e.stopPropagation();
-						browserState.actions.duplicate(tabId);
+						browserState.duplicate(tab.id);
 					}}
 				>
 					<CopyIcon />
@@ -146,10 +151,24 @@
 					tooltip="Save for later"
 					onclick={(e: MouseEvent) => {
 						e.stopPropagation();
-						savedTabState.actions.save(tab);
+						savedTabState.save(tab).then((r) => toastOnError(r, 'Failed to save tab'));
 					}}
 				>
-					<BookmarkIcon />
+					<ArchiveIcon />
+				</Button>
+
+				<Button
+					variant="ghost"
+					size="icon-xs"
+					tooltip={isBookmarked ? 'Remove bookmark' : 'Bookmark'}
+					onclick={(e: MouseEvent) => {
+						e.stopPropagation();
+						bookmarkState.toggle(tab).then((r) => toastOnError(r, 'Failed to toggle bookmark'));
+					}}
+				>
+					<StarIcon
+						class={isBookmarked ? 'fill-amber-500 text-amber-500' : ''}
+					/>
 				</Button>
 
 				<Button
@@ -159,7 +178,7 @@
 					tooltip="Close"
 					onclick={(e: MouseEvent) => {
 						e.stopPropagation();
-						browserState.actions.close(tabId);
+						browserState.close(tab.id);
 					}}
 				>
 					<XIcon />

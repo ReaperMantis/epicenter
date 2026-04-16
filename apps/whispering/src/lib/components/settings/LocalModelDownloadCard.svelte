@@ -2,6 +2,7 @@
 	import { Badge } from '@epicenter/ui/badge';
 	import { Button } from '@epicenter/ui/button';
 	import { Progress } from '@epicenter/ui/progress';
+	import { toast } from '@epicenter/ui/sonner';
 	import { Spinner } from '@epicenter/ui/spinner';
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import Download from '@lucide/svelte/icons/download';
@@ -15,15 +16,14 @@
 		writeFile,
 	} from '@tauri-apps/plugin-fs';
 	import { fetch } from '@tauri-apps/plugin-http';
-	import { toast } from 'svelte-sonner';
 	import { extractErrorMessage } from 'wellcrafted/error';
 	import { Ok, tryAsync } from 'wellcrafted/result';
 	import { PATHS } from '$lib/constants/paths';
 	import {
 		isModelFileSizeValid,
 		type LocalModelConfig,
-	} from '$lib/services/isomorphic/transcription/local/types';
-	import { settings } from '$lib/state/settings.svelte';
+	} from '$lib/services/transcription/local/types';
+	import { deviceConfig } from '$lib/state/device-config.svelte';
 
 	let {
 		model,
@@ -136,7 +136,7 @@
 	$effect(() => {
 		// React to settings changes for this engine
 		const settingsKey = `transcription.${model.engine}.modelPath` as const;
-		const currentPath = settings.value[settingsKey];
+		const currentPath = deviceConfig.get(settingsKey);
 		// Trigger refresh when settings change (currentPath is a dependency)
 		refreshStatus();
 	});
@@ -154,7 +154,7 @@
 
 				// Check if this model is active in settings
 				const settingsKey = `transcription.${model.engine}.modelPath` as const;
-				const currentPath = settings.value[settingsKey];
+				const currentPath = deviceConfig.get(settingsKey);
 				const isActive = currentPath === path;
 
 				modelState = isActive ? { type: 'active' } : { type: 'ready' };
@@ -300,7 +300,7 @@
 		const path = await ensureModelDestinationPath();
 		const settingsKey = `transcription.${model.engine}.modelPath` as const;
 
-		settings.updateKey(settingsKey, path);
+		deviceConfig.set(settingsKey, path);
 		// The settings watcher will update modelState to 'active'
 		toast.success('Model activated');
 	}
@@ -318,8 +318,8 @@
 				// Clear settings if this was the active model
 				const settingsKey = `transcription.${model.engine}.modelPath` as const;
 
-				if (settings.value[settingsKey] === path) {
-					settings.updateKey(settingsKey, '');
+				if (deviceConfig.get(settingsKey) === path) {
+					deviceConfig.set(settingsKey, '');
 				}
 
 				modelState = { type: 'not-downloaded' };

@@ -1,6 +1,6 @@
 # Server Package Consolidation
 
-**Status**: Implemented
+**Status**: Superseded by `20260307T000000-remove-server-remote-standalone.md`
 **Date**: 2026-03-05
 **Supersedes**: Parts of `20260304T120000-hub-sidecar-architecture.md` (package structure section)
 **Superseded by**: `20260305T180000-server-remote-adapter-architecture.md` (adapter hosting model — splits adapters into separate packages)
@@ -430,4 +430,4 @@ After implementing Phases 1-2, we identified friction with the nested adapter ap
 
 **Decision:** Split adapters into separate packages. See `20260305T180000-server-remote-adapter-architecture.md` for the full spec.
 
-Target: `server-remote` (shared core) + `server-remote-cloudflare` + `server-remote-standalone` as three workspace packages. Each adapter gets config files at package root, clean scripts, and isolated dependencies.
+Target: `server-remote` (shared core) + `server-remote` + `server-remote-standalone` as three workspace packages. Each adapter gets config files at package root, clean scripts, and isolated dependencies.

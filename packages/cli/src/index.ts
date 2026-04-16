@@ -1,12 +1,9 @@
 /** @module @epicenter/cli — Public API for the Epicenter CLI package. */
 
+export { type AuthApi, createAuthApi } from './auth/api';
+export { type AuthSession, createSessionStore } from './auth/store';
 export { createCLI } from './cli';
-export {
-	type AnyWorkspaceClient,
-	type DiscoveredWorkspace,
-	discoverWorkspaces,
-	resolveWorkspace,
-	type WorkspaceResolution,
-} from './discovery';
-export { createHttpClient, type HttpClient } from './http-client';
-export { cacheDir, resolveEpicenterHome, workspacesDir } from './paths';
+export { createCliUnlock } from './extensions';
+export { type LoadConfigResult, loadConfig } from './load-config';
+export { connectWorkspace } from './connect';
+export { EPICENTER_PATHS } from './paths';

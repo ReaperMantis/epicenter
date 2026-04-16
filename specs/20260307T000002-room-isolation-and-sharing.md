@@ -5,6 +5,8 @@
 **Author**: AI-assisted
 **Supersedes**: `20260307T000001-org-scoped-rooms.md`
 
+> **Update (2026-03-13):** DO names now include a type segment: `user:{userId}:{type}:{name}` where `{type}` is `workspace` or `document`. The room key examples below use the original format `user:{userId}:{roomName}`. See `20260313T201800-do-naming-convention.md`.
+
 ## Overview
 
 User-scoped room keys (`user:{userId}:{roomName}`) for document isolation, with a `room_access` table as the single source of truth for shared access. No roles — all shared users are editors. Org membership can populate `room_access` rows in the future, but is never the room key itself.
@@ -16,7 +18,7 @@ User-scoped room keys (`user:{userId}:{roomName}`) for document isolation, with 
 Room keys are user-scoped — the Worker prefixes `user:{userId}:` before calling `idFromName()`:
 
 ```typescript
-// packages/server-remote-cloudflare/src/app.ts:196
+// packages/server-remote/src/app.ts:196
 const roomKey = `user:${c.var.user.id}:${c.req.param('room')}` as const;
 const stub = c.env.YJS_ROOM.get(c.env.YJS_ROOM.idFromName(roomKey));
 ```
@@ -288,14 +290,14 @@ These are inspiration for Phase 3, not requirements for Phase 2.
 - [ ] Owner can share by email and unshare by userId
 - [ ] Revoking access returns 403 on next connection attempt
 - [ ] `GET /rooms/shared` returns all rooms shared with the current user
-- [ ] TypeScript compiles: `bun run typecheck` in `packages/server-remote-cloudflare`
+- [ ] TypeScript compiles: `bun run typecheck` in `packages/server-remote`
 - [ ] YjsRoom DO has zero changes (only JSDoc updates)
 
 ## References
 
-- `packages/server-remote-cloudflare/src/app.ts` — Worker routes, auth middleware, room key construction
-- `packages/server-remote-cloudflare/src/yjs-room.ts` — Durable Object (unchanged by this spec)
-- `packages/server-remote-cloudflare/src/db/schema.ts` — Drizzle schema, add `roomAccess` table here
+- `packages/server-remote/src/app.ts` — Worker routes, auth middleware, room key construction
+- `packages/server-remote/src/yjs-room.ts` — Durable Object (unchanged by this spec)
+- `packages/server-remote/src/db/schema.ts` — Drizzle schema, add `roomAccess` table here
 - `packages/epicenter/src/extensions/sync.ts` — Client WebSocket URL construction
 - `packages/epicenter/src/extensions/http-sync.ts` — Client HTTP sync URL construction
 - `specs/20260307T000001-org-scoped-rooms.md` — Alternative approach (superseded by this spec)
