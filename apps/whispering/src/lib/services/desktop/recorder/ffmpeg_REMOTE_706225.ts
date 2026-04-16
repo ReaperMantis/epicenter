@@ -238,9 +238,7 @@ const enumerateDevices = async (): Promise<Result<Device[], RecorderError>> => {
 	}
 
 	// FFmpeg lists devices to stderr, not stdout
-	const output = DESKTOP_PLATFORM !== 'linux'
-	? result.stderr
-	: result.stdout;
+	const output = result.stderr;
 
 	const devices = parseDevices(output);
 
@@ -558,15 +556,10 @@ function parseDevices(output: string): Device[] {
 		},
 		linux: {
 			// Linux ALSA format: hw:0,0 Device Name
-			// Linux arecord format: card X: <card name>, device Y: <device name\>
-			regex: /^card (\d+).+device (\d+): (.+)(?: \[.+\])*/,
-			extractDevice: (match) => ({
-				id: asDeviceIdentifier(
-					match[1] && match[2]
-						? `hw:${match[1]},${match[2]}`
-						: ''
-				),
-				label: match[3]?.trim() ?? '',
+			regex: /^(hw:\d+,\d+)\s+(.+)/,
+			extractDevice: (match: RegExpMatchArray) => ({
+				id: asDeviceIdentifier(match[1] ?? ''),
+				label: match[2]?.trim() ?? '',
 			}),
 		},
 	};

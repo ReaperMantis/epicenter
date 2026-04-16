@@ -1,4 +1,4 @@
-import { createPersistedState } from '@epicenter/svelte';
+import { createPersistedState } from '@epicenter/svelte-utils';
 import { invoke } from '@tauri-apps/api/core';
 import { join } from '@tauri-apps/api/path';
 import { exists, remove, stat } from '@tauri-apps/plugin-fs';
@@ -21,13 +21,35 @@ import {
 	type FfmpegRecordingParams,
 	RecorderError,
 	type RecorderService,
-} from '$lib/services/recorder/types';
+} from '$lib/services/isomorphic/recorder/types';
 import {
 	asDeviceIdentifier,
 	type Device,
 	type DeviceAcquisitionOutcome,
 	type DeviceIdentifier,
 } from '$lib/services/types';
+
+/**
+ * Desktop platforms supported by FFmpeg recording.
+ * Mobile platforms (ios, android) are not supported as FFmpeg
+ * command-line recording requires a desktop environment.
+ */
+type DesktopPlatform = 'macos' | 'windows' | 'linux';
+
+/**
+ * Validates and narrows the platform type to desktop platforms only.
+ * FFmpeg recording is only available on desktop (macOS, Windows, Linux).
+ * @throws Error if called on a mobile platform
+ */
+function getDesktopPlatform(platform: OsType): DesktopPlatform {
+	if (platform === 'ios' || platform === 'android') {
+		throw new Error(`FFmpeg recording is not supported on ${platform}`);
+	}
+	return platform;
+}
+
+// Validate at module load - ensures all platform configs below are safe
+const DESKTOP_PLATFORM = getDesktopPlatform(PLATFORM_TYPE);
 
 /**
  * Default FFmpeg global options.
@@ -111,9 +133,11 @@ export const FFMPEG_SMALLEST_COMPRESSION_OPTIONS =
  * - **Windows**: DirectShow (`-f dshow`) - Windows multimedia framework
  * - **Linux**: ALSA (`-f alsa`) - Advanced Linux Sound Architecture
  *
- * Empty string on non-desktop platforms (FFmpeg recording is desktop-only).
+ * These options tell FFmpeg which audio subsystem to use for capturing input
+ * from the system's audio devices.
  *
  * @example
+ * // Platform-specific usage
  * const command = `ffmpeg ${FFMPEG_DEFAULT_INPUT_OPTIONS} -i device output.wav`;
  */
 export const FFMPEG_DEFAULT_INPUT_OPTIONS = (
@@ -121,10 +145,8 @@ export const FFMPEG_DEFAULT_INPUT_OPTIONS = (
 		macos: '-f avfoundation',
 		windows: '-f dshow',
 		linux: '-f alsa',
-		ios: '',
-		android: '',
-	} as const satisfies Record<OsType, string>
-)[PLATFORM_TYPE];
+	} as const satisfies Record<DesktopPlatform, string>
+)[DESKTOP_PLATFORM];
 
 /**
  * Platform-specific command to enumerate available audio recording devices.
@@ -137,9 +159,8 @@ export const FFMPEG_DEFAULT_INPUT_OPTIONS = (
  * The output of these commands is parsed by `parseDevices()` to extract
  * device IDs and labels for the UI.
  *
- * Empty string on non-desktop platforms (FFmpeg recording is desktop-only).
- *
  * @example
+ * // Execute device enumeration
  * const command = asShellCommand(FFMPEG_ENUMERATE_DEVICES_COMMAND);
  * const result = await services.command.execute(command);
  */
@@ -148,10 +169,8 @@ export const FFMPEG_ENUMERATE_DEVICES_COMMAND = (
 		macos: 'ffmpeg -f avfoundation -list_devices true -i ""',
 		windows: 'ffmpeg -list_devices true -f dshow -i dummy',
 		linux: 'arecord -l',
-		ios: '',
-		android: '',
-	} as const satisfies Record<OsType, string>
-)[PLATFORM_TYPE];
+	} as const satisfies Record<DesktopPlatform, string>
+)[DESKTOP_PLATFORM];
 
 /**
  * Default audio device identifier for the current platform.
@@ -166,40 +185,37 @@ export const FFMPEG_ENUMERATE_DEVICES_COMMAND = (
  * - **Windows**: `"default"` - System default DirectShow audio capture device
  * - **Linux**: `"default"` - System default ALSA/PulseAudio device
  *
- * Falls back to `"default"` on non-desktop platforms.
- *
  * @example
+ * // Using as fallback
  * const deviceId = selectedDeviceId ?? FFMPEG_DEFAULT_DEVICE_IDENTIFIER;
  */
 export const FFMPEG_DEFAULT_DEVICE_IDENTIFIER = asDeviceIdentifier(
 	(
 		{
-			macos: '0',
-			windows: 'default',
-			linux: 'default',
-			ios: 'default',
-			android: 'default',
-		} as const satisfies Record<OsType, string>
-	)[PLATFORM_TYPE],
+			macos: '0', // Use first audio device index for avfoundation
+			windows: 'default', // Default DirectShow audio capture
+			linux: 'default', // Default ALSA/PulseAudio device
+		} as const satisfies Record<DesktopPlatform, string>
+	)[DESKTOP_PLATFORM],
 );
 
 // Persisted state - single source of truth
 const sessionState = createPersistedState({
 	key: 'whispering-ffmpeg-recording-session',
 	schema: FfmpegSession,
-	defaultValue: null,
+	onParseError: () => null,
 });
 
 // Helper to get current Child instance lazily from PID
 // Returns null if no session is active
 const getCurrentChild = (): Child | null => {
-	const session = sessionState.current;
+	const session = sessionState.value;
 	return session ? new Child(session.pid) : null;
 };
 
 // Helper to clear session and kill any running process
 const clearSession = async (): Promise<void> => {
-	const session = sessionState.current;
+	const session = sessionState.value;
 	if (!session) return;
 
 	// Try to kill the process if it exists
@@ -218,11 +234,11 @@ const clearSession = async (): Promise<void> => {
 	});
 
 	// Clear the session state
-	sessionState.current = null;
+	sessionState.value = null;
 };
 
 // Clear any orphaned process on initialization
-if (sessionState.current) {
+if (sessionState.value) {
 	console.log('Found orphaned FFmpeg session, cleaning up...');
 	clearSession();
 }
@@ -261,7 +277,7 @@ export const FfmpegRecorderServiceLive: RecorderService = {
 	getRecorderState: async (): Promise<
 		Result<WhisperingRecordingState, RecorderError>
 	> => {
-		return Ok(sessionState.current ? 'RECORDING' : 'IDLE');
+		return Ok(sessionState.value ? 'RECORDING' : 'IDLE');
 	},
 
 	enumerateDevices,
@@ -368,7 +384,7 @@ export const FfmpegRecorderServiceLive: RecorderService = {
 		}
 
 		// Store the PID and session info for recovery after refresh
-		sessionState.current = {
+		sessionState.value = {
 			pid: process.pid,
 			outputPath,
 		};
@@ -385,7 +401,7 @@ export const FfmpegRecorderServiceLive: RecorderService = {
 		sendStatus,
 	}): Promise<Result<Blob, RecorderError>> => {
 		const child = getCurrentChild();
-		const session = sessionState.current;
+		const session = sessionState.value;
 		if (!child || !session) {
 			return RecorderError.NotRecording({
 				message: 'No active recording to stop',
@@ -428,7 +444,7 @@ export const FfmpegRecorderServiceLive: RecorderService = {
 		const outputPath = session.outputPath;
 
 		// Clear the session
-		sessionState.current = null;
+		sessionState.value = null;
 
 		// Poll for file stabilization
 		const MAX_WAIT_TIME = 3000; // 3 seconds max
@@ -493,7 +509,7 @@ export const FfmpegRecorderServiceLive: RecorderService = {
 	cancelRecording: async ({
 		sendStatus,
 	}): Promise<Result<CancelRecordingResult, RecorderError>> => {
-		const session = sessionState.current;
+		const session = sessionState.value;
 		if (!session) {
 			return Ok({ status: 'no-recording' });
 		}
@@ -543,7 +559,7 @@ function parseDevices(output: string): Device[] {
 		macos: {
 			// macOS format: [AVFoundation input device @ 0x...] [0] Built-in Microphone
 			regex: /\[AVFoundation.*?\]\s+\[(\d+)\]\s+(.+)/,
-			extractDevice: (match: RegExpMatchArray) => ({
+			extractDevice: (match) => ({
 				id: asDeviceIdentifier(match[2]?.trim() ?? ''),
 				label: match[2]?.trim() ?? '',
 			}),
@@ -551,7 +567,7 @@ function parseDevices(output: string): Device[] {
 		windows: {
 			// Windows DirectShow format: "Microphone Name" (audio)
 			regex: /^\s*"(.+?)"\s+\(audio\)/,
-			extractDevice: (match: RegExpMatchArray) => ({
+			extractDevice: (match) => ({
 				id: asDeviceIdentifier(match[1] ?? ''),
 				label: match[1] ?? '',
 			}),
@@ -569,11 +585,13 @@ function parseDevices(output: string): Device[] {
 				label: match[3]?.trim() ?? '',
 			}),
 		},
-	};
+	} satisfies Record<
+		DesktopPlatform,
+		{ regex: RegExp; extractDevice: (match: RegExpMatchArray) => Device }
+	>;
 
-	// Select configuration based on platform (only called on desktop)
-	if (PLATFORM_TYPE === 'ios' || PLATFORM_TYPE === 'android') return [];
-	const config = platformConfig[PLATFORM_TYPE];
+	// Select configuration based on platform
+	const config = platformConfig[DESKTOP_PLATFORM];
 
 	// Parse all devices
 	const allDevices = output.split('\n').reduce<Device[]>((devices, line) => {
@@ -599,11 +617,11 @@ function parseDevices(output: string): Device[] {
 export function formatDeviceForPlatform(deviceId: string) {
 	switch (PLATFORM_TYPE) {
 		case 'macos':
-			return `:${deviceId}`;
+			return `:${deviceId}`; // macOS uses :deviceName
 		case 'windows':
-			return `audio=${deviceId}`;
-		default:
-			return deviceId;
+			return `audio=${deviceId}`; // Windows uses audio=deviceName
+		case 'linux':
+			return deviceId; // Linux uses device directly
 	}
 }
 

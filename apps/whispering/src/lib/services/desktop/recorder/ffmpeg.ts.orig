@@ -558,6 +558,7 @@ function parseDevices(output: string): Device[] {
 		},
 		linux: {
 			// Linux ALSA format: hw:0,0 Device Name
+<<<<<<< HEAD
 			// Linux arecord format: card X: <card name>, device Y: <device name\>
 			regex: /^card (\d+).+device (\d+): (.+)(?: \[.+\])*/,
 			extractDevice: (match) => ({
@@ -567,6 +568,12 @@ function parseDevices(output: string): Device[] {
 						: ''
 				),
 				label: match[3]?.trim() ?? '',
+=======
+			regex: /^(hw:\d+,\d+)\s+(.+)/,
+			extractDevice: (match: RegExpMatchArray) => ({
+				id: asDeviceIdentifier(match[1] ?? ''),
+				label: match[2]?.trim() ?? '',
+>>>>>>> origin/main
 			}),
 		},
 	};
